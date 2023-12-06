@@ -2,39 +2,57 @@
 
 This app for Splunk connects to the Signal Sciences API in order to pull data into Splunk. 
 
-## Signal Sciences REST API Endpoints used
+## LOOK HERE FIRST
+---
+**This app is not maintained by Fastly**
+**This app is open source and maintained by @jeremy-cxf**
+**Please do not use Fastly official support channels for support, you will simply be referred here.** 
+**If you have an issue please raise it on github issues. I maintain this in my spare time, so please be patient if I haven't seen it.**
 
-The latest version **only** supports using API Tokens. 
+---
 
-Information about API Tokens can be found at https://docs.signalsciences.net/developer/using-our-api/
+## Overview.
+
+The ngwaf-splunk-ta polls in configured intervals to the following endpoints:
 
 1. https://dashboard.signalsciences.net/api/v0/corps/{{corp}}/sites/{{site}}/analytics/events
 2. https://dashboard.signalsciences.net/api/v0/corps/{{corp}}/sites/{{site}}/feed/requests
 3. https://dashboard.signalsciences.net/api/v0/corps/{{corp}}/activity
 
+Information about API Tokens can be found at https://docs.signalsciences.net/developer/using-our-api/
 
-## Where to get API Information?
+## Pre-requsites
 
-The Corp name and Dashboard Site names are in the URL for the dashboard. For example if we had a Corp Name of `foo` and a Dashboard Site name of `bar` we would see it like the following:
+Before you begin the install, you'll need the following:
 
+Your:
+- Corp name. 
+- Site name (for the request feed input module)
+- API token (of a user with read permissions)
+
+The Corp name and Dashboard Site names are in the URL for the dashboard. 
+The sitename must be in "shortname" format (e.g no special characters).
+
+The easiest way is often retrieving it from the URL bar of your preferred browser when viewing a site e.g:
 `https://dashboard.signalsciences.net/corps/{CORP_NAME}/sites/{site_api_name}`
 
-You can also get the API Name for Dashboard Sites from the Manage Sites menu if you are a Corp Owner or Corp Admin. When logging into the Signal Sciences Dashboard you can go to `Corp Tools` -> `Manage Sites` and the lowercase name under the display name is the API Name.
+You can also get the site name from the Manage Sites menu if you are a user who has read permissions to a corp/site. This can be done via going to: `Corp Tools` -> `Manage Sites` and using the lowercase name under the display name in the menu.
 
-![screen1](screenshots/screen8.jpg "API Name")
+For example, the sitename in this instance is `jeremycx`
+![Alt text](image.png)
 
+Information about obtaining API Tokens can be found at https://docs.signalsciences.net/developer/using-our-api/.
+Generally they can be created is under the hamburger menu "My account => API Tokens"
 
 ## Indexes
-
 The Technical Adapter does not create an index by default.
 
-
-## Configuration 1.0.27 or higher
+## Configuration 1.0.37 or higher
 
 Once the Splunk App has been installed you will need to configure the shared settings and then the Modular Data inputs.
 
 1. Log into your Splunk Web Portal
-2. Select the sigsci_TA_for_splunk
+2. Select the ngwaf_TA_for_splunk
 
    ![01-Select_Sigsci_App](screenshots/01-Select_Sigsci_App.png "Select SigSci App")
     
@@ -44,7 +62,7 @@ Once the Splunk App has been installed you will need to configure the shared set
 
    * **Email Address:** This is the username/email address for the Signal Sciences dashboard
    * **API Token:** This is required and should be a token associated with your e-mail address
-   * **Corp Name** This is the API id for the corp, often if your Display Name for the corp is "Corp ABC" the API Name might be something like `corp-abc`
+   * **Corp Name** This is the API id for the corp which we obtained above.
 
    ![02-Select_Add-on_Settings](screenshots/02-Select_Add-on_Settings.png "Select Add-on Configuration")
 
@@ -54,7 +72,7 @@ Once the Splunk App has been installed you will need to configure the shared set
 
    ![03-Select_Create_New_Input](screenshots/03-Select_Create_New_Input.png "Select Input Configuration")
 
-9. Chose either "Sigsci Requests" or "Sigsci Event"
+9. Chose either "Sigsci Requests" or "Sigsci Event" or "Sigsci Activity"
 10. Fill in the Input settings
 
     * **Name:** This is the unique name you would like to give the input
@@ -63,90 +81,31 @@ Once the Splunk App has been installed you will need to configure the shared set
     * **Interval:** This is the interval frequency the script runs in, in seconds. This should be the same as the delta and is recommended to leave at 300
     * **Site API Name:** This is the API Name for the dashboard it could be something like `app-prod`
 
-   ![04-Fill_Input_settings](screenshots/04-Fill_Input_settings.png "Fill in Input Configuration")
+Screenshot here.
+
+---
+
+# Behaviour
+
+Each input module will run at each interval configured. There are exceptions with the request feed input, which will always be 5minutes behind due to the time it can take to propagate events in the request feed after collection.
+
+If you need "real-time" logging for an on-prem agent, then it best to use `waf-data-log` on the agent and use a splunk collector to export this.
+
+## Catch Up Mode
+
+This behaviour lingers on from the original incantation of the application. 
+I consider it a bit of an anti pattern and don't recommend using it.
+
+- When this is `true` the following will occur:
+- The TA will always use the last timestamp stored.
+- Due to API requirements, the `from` timestamp cannot be older than 24 hours. In the condition the last stored timestamp is over 24 hours, then it will reset to exactly 24 hours ago and try to catch up.
+
+I do not recommend this setting in the use case of the app having to paginate alot of requests. 
+
+## Attack and Anomaly Signals Only
+
+This is useful to setup as a seperate input module if you're wanting to aggregate both your normal request feed, and one only with attack signals in. This could be useful for monitoring / alerting. However, note that the NGWAF dashboard should not be considered a replacement of proper logging of your access logs or CDN service, and should be used in conjunction with them for non-anomalous traffic. Excessive signals reduces visibility.
 
 ## Updating the App
 
-The new process for updating the App is to:
-
-1. Install the Splunk App builder
-2. Select the App Builder
-3. Click "Import Project"
-4. Use the latest `sigsci_TA_for_splunk_*_export.tgz` file in ![export_files](app_builder_import_file) "Export Folder"
-    ![Import App](screenshots/update-01-import-app.png) "Import the Splunk App"
-
-### General App Properties
-
-1. Open the Splunk App Builder
-2. Click on properties
-   ![Open App Properties](screenshots/update-02-app-tile.png) "Select app properties"
-3. Make any changes and hit change
-    _IMPORTANT NOTE: changing the Add-on Folder Name could cause users to need to install the app fresh instead of upgrading_
-    ![App Properties](screenshots/update-03-app-properties.png) "Update App Properties"
-
-### App Input Configuration
-
-1. Open the Splunk App Builder
-2. Click on the App Tile
-3. Click on Configure Data Collection
-4. Click on edit for the desired input
-
-**Data Input Properties**
-These are general properties for the input
-
-![Data Properties](screenshots/update-05a-data-input-properties.png) "Data Properties"
-
-| Property            | Description                                                           |
-|---------------------|-----------------------------------------------------------------------|
-| Source Type Name    | The name of the input that will be used in searches. Can't be changed |
-| Input display name  | The Display Name for the input                                        | 
-| Input Name          | The API Name for the input                                            |
-| Description         | The description is optional                                           |
-| Collection Interval | The frequency the Modular Input is executed by the Splunk Server      |
-   
-**Data Input Parameters**
-These are properties for the specific Modular Input
-
-![Data Parameters](screenshots/update-05b-data-input-parameters.png) "Data Parameters"
-
-| Property      | Description                                                                                     |
-|---------------|-------------------------------------------------------------------------------------------------|
-| time_delta    | The time delta in seconds used by the modular input                                             |
-| site_api_name | For the non-corp API configurations (SigsciEvents and SigsciRequests) this is the Site API Name |
-
-**Add-on Setup Parameters** 
-These are the global properties shared between all of the input types
-![Global Properties](screenshots/update-05c-global-properties.png) "Global Properties"
-
-| Property      | Description                                    |
-|---------------|------------------------------------------------|
-| email         | The email for the API user to be used          |
-| corp_api_name | The API name for the corp to pull data from    |
-| api_token     | The API token for th account to pull data from |
-
-Once Finished click Save and Finish
-
-### Manage Source Types
-The Manage source Types is used to configure how the input parses different properties of what is returned. This is configured to be JSON with specific criteria to find the timestamp.
-![Manage Source Types](screenshots/update-06-update-source-types-details.png) "Source Type Details"
-
-Once you are done updating click save
-
-## Exporting Splunk App Builder Package and Splunkbase Packages
-
-**Export App for using in a new Splunk App Builder**
-1. Open the Splunk App builder
-2. Click the properties for the Signal Sciences WAF TA
-3. Update the Version
-4. Save the changes
-5. Click Export. This file will be the new version of the `.tgz` file that you will need for importing on a new Splunk setup to use it in the App Builder
-
-**Export App to Submit to Splunk Base**
-1. Click Validate & Package
-2. Click Validate
-3. Once validation is completed click Download Package
-4. Log into Splunkbase
-5. Go to App Management
-6. Select the App
-7. Click New Version
-8. Upload the new `.spl` file
+This can be done in the UI via downloading the new version from splunkbase, same as you would any other plugin.
