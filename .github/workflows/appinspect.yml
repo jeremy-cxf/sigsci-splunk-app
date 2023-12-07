@@ -1,0 +1,12 @@
+on: workflow_dispatch
+
+jobs:
+  app-inspect:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: splunk/appinspect-api-action@v3.0
+      with:
+        app_path: 'sigsci_TA_for_splunk'
+        username: ${{ secrets.SPLUNKBASE_USERNAME }}
+        password: ${{ secrets.SPLUNKBASE_PASSWORD }}
